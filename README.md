@@ -7,6 +7,14 @@
 - **대시보드**: Streamlit, Korean-first (`dashboard/app.py`)
 - **테스트**: pytest (`tests/`)
 
+> **MYCERRA Agent OS (web)** — A separate, local-first internal web app built
+> with **Next.js + TypeScript + PostgreSQL + Prisma + Tailwind** lives in
+> [`web/`](web/). It is the command center for B2B sales, sample review,
+> proposals, content drafts, risk review (Green/Yellow/Red/Black) and Wadiz
+> prep. See [`web/README.md`](web/README.md) for setup. Like the rest of this
+> repo, it never sends email, never auto-publishes, and never auto-approves
+> sample requests.
+
 ## 실행 / Run (local only)
 
 ```bash

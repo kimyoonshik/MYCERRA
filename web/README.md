@@ -1,0 +1,187 @@
+# MYCERRA Agent OS
+
+A **local-first internal command center** for SAVE EARTH Inc. to manage MYCERRA's
+B2B biomaterial sales, sample review, material sample book requests, Paid PoC
+proposals, Wadiz campaign preparation, content drafts, and legal/risk review.
+
+This is the **local-first MVP**: it runs on the operator's machine and is not
+meant to be exposed publicly.
+
+## Tech stack
+
+- **Next.js 14** (App Router) + **TypeScript**
+- **PostgreSQL** via **Prisma ORM**
+- **Tailwind CSS**
+- Simple **admin-only** authentication (single password + signed cookie)
+
+## Core modules
+
+1. **Dashboard** — summary cards across every module + guardrail reminders
+2. **Products** — product catalogue (Pure Mat, Dyed Base Mat, Finished Sheet, …)
+3. **Offers** — sales packages, optionally linked to a product
+4. **Leads / Customers** — lightweight CRM with pipeline stages
+5. **Sample Requests** — requests with a manual owner-approval gate
+6. **Proposals** — sample review / Paid PoC / licensing proposals
+7. **Content Board** — drafts that are risk-classified on save
+8. **Risk Review** — classify phrases Green / Yellow / Red / Black
+9. **Wadiz Board** — campaign-prep task board
+10. **Settings** — local organisation details + fixed-policy reference
+
+Every CRUD module supports **search**, **CSV export**, and **CSV import**.
+
+## Business rules (enforced in code)
+
+These are **not** configurable toggles — they are enforced server-side:
+
+- The app **does not** automatically send emails.
+- The app **does not** automatically publish content.
+- The app **does not** automatically approve sample requests
+  (a request can only reach *approved / shipped* after `ownerApproved` is set
+  manually).
+- All external communications require **owner approval**
+  (`ownerApproved`) before they are considered external-ready.
+- Confidential domains — **Pure Mat, licensing, production conditions, strains,
+  substrates, detailed SOP, production cost, failure data** — are protected.
+  Affected products are flagged `confidential`.
+- **Risk classification**: every reviewed phrase is one of
+  **Green / Yellow / Red / Black**.
+- **Black-level** information is **blocked from external-facing drafts**:
+  - Content drafts whose body classifies as BLACK cannot be owner-approved.
+  - Proposals whose content classifies as BLACK cannot be owner-approved.
+- There are **no external API calls or live integrations** in this version.
+
+The risk classifier (`src/lib/risk.ts`) is a deterministic, offline keyword
+heuristic — no LLM, no network. Swap that one file to upgrade the logic; the
+rest of the app is unchanged.
+
+## Getting started
+
+### 1. Prerequisites
+
+- Node.js 18.18+ (tested on Node 22)
+- A local PostgreSQL instance
+
+### 2. Install
+
+```bash
+cd web
+npm install
+```
+
+### 3. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
+
+```dotenv
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/mycerra?schema=public"
+ADMIN_PASSWORD="choose-a-local-admin-password"
+AUTH_SECRET="a-long-random-string"
+```
+
+### 4. Create the database schema and seed data
+
+```bash
+npx prisma migrate dev      # creates tables (uses the committed migration)
+npm run seed                # loads the 7 initial products + 7 initial offers
+```
+
+### 5. Run
+
+```bash
+npm run dev                 # http://localhost:3000
+```
+
+Open <http://localhost:3000>, sign in with `ADMIN_PASSWORD`, and you'll land on
+the Dashboard.
+
+### Production-style run
+
+```bash
+npm run build
+npm start
+```
+
+## Seed data
+
+`prisma/seed.ts` is idempotent (upsert by `code`) and creates:
+
+**Products** — MYCERRA Pure Mat *(confidential)*, Dyed Base Mat, Finished
+Bio-Material Sheet, Material Sample Book, Craft Line, Launch Studio, Partner
+Production / Licensing *(confidential)*.
+
+**Offers** — Finished Sheet Sample Review Package, Material Sample Book Package,
+Paid PoC Package, Craft Line Wadiz Reward Package, Global Sample Review Package,
+Launch Studio Consulting Package, Partner Production / Licensing Gate Package.
+
+## CSV import/export
+
+- **Export**: each module has an *Export CSV* button → `GET /api/export/:resource`.
+- **Import**: *Import CSV* uploads a file → `POST /api/import/:resource`.
+  Rows are upserted by `id` when present, otherwise created. Business guards
+  (`beforeWrite`) still apply to every imported row, and per-row errors are
+  reported back. Round-tripping an export back through import works.
+
+## Project structure
+
+```
+web/
+├─ prisma/
+│  ├─ schema.prisma         # data model + enums (business rules encoded)
+│  ├─ migrations/           # committed SQL migration(s)
+│  └─ seed.ts               # initial products & offers
+├─ src/
+│  ├─ middleware.ts         # auth gate for all non-public routes
+│  ├─ app/
+│  │  ├─ layout.tsx         # root layout
+│  │  ├─ login/             # admin sign-in
+│  │  ├─ (app)/             # authenticated shell + module pages
+│  │  │  ├─ page.tsx        # Dashboard
+│  │  │  ├─ products/ … wadiz/ , settings/
+│  │  └─ api/
+│  │     ├─ auth/           # login / logout
+│  │     ├─ [resource]/     # generic CRUD (list/create/read/update/delete)
+│  │     ├─ export/[resource]/   # CSV export
+│  │     ├─ import/[resource]/   # CSV import
+│  │     ├─ classify/       # risk classifier (no storage)
+│  │     ├─ dashboard/      # summary counts
+│  │     └─ settings/       # local org settings
+│  ├─ components/           # Sidebar, ResourceManager, RiskClassifier, …
+│  └─ lib/
+│     ├─ prisma.ts          # Prisma client singleton
+│     ├─ auth.ts            # HMAC session (edge + node safe)
+│     ├─ resource-meta.ts   # client-safe field metadata (single source of truth)
+│     ├─ resources.ts       # server registry: model + write-time guards
+│     ├─ risk.ts            # Green/Yellow/Red/Black classifier
+│     └─ csv.ts             # dependency-free CSV parse/serialize
+```
+
+### How the generic CRUD works
+
+Each entity is described once in `src/lib/resource-meta.ts` (fields, types,
+labels, enum options). The server registry (`src/lib/resources.ts`) binds that
+metadata to a Prisma delegate plus optional `beforeWrite` guards. The same
+metadata drives the generic UI table/forms (`ResourceManager`) and the generic
+REST API (`/api/[resource]`). Adding a field is usually a one-line change.
+
+## Useful scripts
+
+| Script | Description |
+| --- | --- |
+| `npm run dev` | Start the dev server |
+| `npm run build` | `prisma generate` + production build |
+| `npm start` | Start the production server |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run seed` | Seed initial products & offers |
+| `npm run prisma:migrate` | `prisma migrate dev` |
+| `npm run db:reset` | Reset DB and re-seed |
+
+## Intentional limitations (first version)
+
+- No live email sending, no external API calls, no live integrations.
+- The risk classifier is a deterministic keyword heuristic, not an LLM.
+- Single admin user; this is not a multi-user identity system.
+- Intended to run locally; do not expose it publicly without adding real auth.
