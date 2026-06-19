@@ -29,6 +29,28 @@ meant to be exposed publicly.
 
 Every CRUD module supports **search**, **CSV export**, and **CSV import**.
 
+## Sample request workflow
+
+Each sample request captures: customer, requested product, sample type, intended
+use, destination country, NDA required, NDA status, quoted price, shipping cost,
+paid-sample / customer-paid-shipping flags, owner approval, approval status,
+shipping status and follow-up date.
+
+Server-side workflow rules (`src/lib/resources.ts`, `samples.beforeWrite`):
+
+- **Pure Mat always requires NDA + owner approval.** If the requested product is
+  Pure Mat, `ndaRequired` is forced on, the NDA status is moved off
+  *Not required*, and the approval status defaults to *Owner approval required*.
+- **Overseas defaults.** On create, a request whose destination country is not
+  Korea defaults to **paid sample** and **customer-paid shipping** (an explicit
+  value in the form is respected).
+- **Never auto-approved.** Approval status can become *Approved* only when
+  `ownerApproved` is explicitly set.
+- **NDA gate.** When an NDA is required, it must be *Signed* before the request
+  can be approved.
+- **Fulfilment gate.** A sample cannot be marked *Shipped* / *Delivered* before
+  the request is *Approved*.
+
 ## Business rules (enforced in code)
 
 These are **not** configurable toggles — they are enforced server-side:

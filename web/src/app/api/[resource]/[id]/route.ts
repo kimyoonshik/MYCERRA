@@ -37,7 +37,7 @@ export async function PATCH(
 
   const data = coerceData(resource, input, true);
   try {
-    resource.beforeWrite?.(data, existing);
+    await resource.beforeWrite?.(data, existing);
   } catch (e) {
     return bad((e as Error).message);
   }

@@ -44,13 +44,25 @@ enum LeadStage {
   LOST
 }
 
-enum SampleStatus {
-  REQUESTED
-  UNDER_REVIEW
-  APPROVED_PENDING_SHIPMENT
-  SHIPPED
+enum NdaStatus {
+  NOT_REQUIRED
+  PENDING
+  SENT
+  SIGNED
+}
+
+enum SampleApprovalStatus {
+  PENDING
+  OWNER_APPROVAL_REQUIRED
+  APPROVED
   REJECTED
-  CLOSED
+}
+
+enum SampleShippingStatus {
+  NOT_SHIPPED
+  PREPARING
+  SHIPPED
+  DELIVERED
 }
 
 enum ProposalType {
@@ -126,7 +138,8 @@ model Product {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  offers Offer[]
+  offers         Offer[]
+  sampleRequests SampleRequest[]
 
   @@index([status])
 }
@@ -171,24 +184,49 @@ model Lead {
 }
 
 model SampleRequest {
-  id              String       @id @default(cuid())
-  leadId          String?
-  lead            Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  offerId         String?
-  offer           Offer?       @relation(fields: [offerId], references: [id], onDelete: SetNull)
-  company         String?
-  contactName     String?
-  sampleType      String?
-  quantity        Int          @default(1)
-  shippingAddress String?
-  status          SampleStatus @default(REQUESTED)
-  // Sample requests are NEVER auto-approved. Owner must explicitly approve.
-  ownerApproved   Boolean      @default(false)
-  notes           String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id          String   @id @default(cuid())
+  // Customer
+  leadId      String?
+  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  company     String?
+  contactName String?
+  // Requested product
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  offerId     String?
+  offer       Offer?   @relation(fields: [offerId], references: [id], onDelete: SetNull)
 
-  @@index([status])
+  sampleType         String?
+  intendedUse        String?
+  destinationCountry String?
+  quantity           Int      @default(1)
+  shippingAddress    String?
+
+  // NDA — Pure Mat always requires NDA + owner approval (enforced in code).
+  ndaRequired Boolean   @default(false)
+  ndaStatus   NdaStatus @default(NOT_REQUIRED)
+
+  // Commercials. Overseas requests default to a paid sample with
+  // customer-paid shipping (enforced on create).
+  quotedPrice          Decimal? @db.Decimal(12, 2)
+  shippingCost         Decimal? @db.Decimal(12, 2)
+  paidSample           Boolean  @default(false)
+  customerPaidShipping Boolean  @default(false)
+
+  // Approval — requests are NEVER auto-approved; owner must approve explicitly.
+  ownerApproved  Boolean              @default(false)
+  approvalStatus SampleApprovalStatus @default(PENDING)
+
+  // Fulfilment.
+  shippingStatus SampleShippingStatus @default(NOT_SHIPPED)
+  followUpDate   DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([approvalStatus])
+  @@index([shippingStatus])
 }
 
 model Proposal {

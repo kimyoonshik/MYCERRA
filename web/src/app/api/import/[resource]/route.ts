@@ -39,7 +39,7 @@ export async function POST(
     }
     const data = coerceData(resource, input, false);
     try {
-      resource.beforeWrite?.(data, null);
+      await resource.beforeWrite?.(data, null);
     } catch (e) {
       errors.push(`Row ${i + 2}: ${(e as Error).message}`);
       continue;

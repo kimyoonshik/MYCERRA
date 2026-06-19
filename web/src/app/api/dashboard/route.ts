@@ -31,7 +31,7 @@ export async function GET() {
     prisma.lead.groupBy({ by: ["stage"], _count: true }),
     prisma.sampleRequest.count(),
     prisma.sampleRequest.count({
-      where: { ownerApproved: false, status: { in: ["REQUESTED", "UNDER_REVIEW"] } },
+      where: { approvalStatus: { in: ["PENDING", "OWNER_APPROVAL_REQUIRED"] } },
     }),
     prisma.proposal.count(),
     prisma.proposal.count({ where: { ownerApproved: false } }),

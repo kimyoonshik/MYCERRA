@@ -45,7 +45,7 @@ export async function POST(
 
   const data = coerceData(resource, input, false);
   try {
-    resource.beforeWrite?.(data, null);
+    await resource.beforeWrite?.(data, null);
   } catch (e) {
     return bad((e as Error).message);
   }

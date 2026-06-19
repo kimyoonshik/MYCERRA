@@ -14,8 +14,29 @@ export interface ResourceDef extends ResourceMeta {
   model: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultOrderBy?: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  beforeWrite?: (data: Record<string, any>, existing?: Record<string, any> | null) => void;
+  beforeWrite?: (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: Record<string, any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    existing?: Record<string, any> | null,
+  ) => void | Promise<void>;
+}
+
+// Countries treated as domestic (Korea). Anything else counts as overseas.
+const DOMESTIC_COUNTRIES = new Set([
+  "KR",
+  "KOR",
+  "ROK",
+  "KOREA",
+  "SOUTH KOREA",
+  "REPUBLIC OF KOREA",
+  "대한민국",
+  "한국",
+]);
+
+function isOverseas(country: unknown): boolean {
+  const c = String(country ?? "").trim();
+  return c !== "" && !DOMESTIC_COUNTRIES.has(c.toUpperCase());
 }
 
 type ServerConfig = Pick<ResourceDef, "model" | "defaultOrderBy" | "beforeWrite">;
@@ -36,17 +57,62 @@ const SERVER_CONFIG: Record<string, ServerConfig> = {
   samples: {
     model: prisma.sampleRequest,
     defaultOrderBy: { createdAt: "desc" },
-    beforeWrite(data) {
-      // Enforce manual approval: a request may only be approved/shipped once
-      // the owner has explicitly set ownerApproved. Never auto-approve.
-      const status = data.status;
-      if (
-        (status === "APPROVED_PENDING_SHIPMENT" || status === "SHIPPED") &&
-        data.ownerApproved !== true
-      ) {
+    async beforeWrite(data, existing) {
+      const isCreate = !existing;
+
+      // Is the requested product Pure Mat? Pure Mat always requires NDA + owner
+      // approval, regardless of what the operator entered.
+      const productId = data.productId ?? existing?.productId;
+      let isPureMat = false;
+      if (productId) {
+        const product = await prisma.product.findUnique({ where: { id: productId } });
+        if (product && (product.code === "PROD-PURE-MAT" || /pure\s*mat/i.test(product.name))) {
+          isPureMat = true;
+        }
+      }
+
+      // Overseas defaults (applied only on create, only when not explicitly set):
+      // paid sample + customer-paid shipping.
+      const country = data.destinationCountry ?? existing?.destinationCountry;
+      if (isCreate && isOverseas(country)) {
+        if (!("paidSample" in data)) data.paidSample = true;
+        if (!("customerPaidShipping" in data)) data.customerPaidShipping = true;
+      }
+
+      // Pure Mat enforcement: NDA required, never NOT_REQUIRED, and approval is
+      // always owner-gated.
+      if (isPureMat) {
+        data.ndaRequired = true;
+        const ndaStatus = data.ndaStatus ?? existing?.ndaStatus ?? "NOT_REQUIRED";
+        if (ndaStatus === "NOT_REQUIRED") data.ndaStatus = "PENDING";
+        if (isCreate && !("approvalStatus" in data)) data.approvalStatus = "OWNER_APPROVAL_REQUIRED";
+      }
+
+      // Resolve effective values for the gating checks below.
+      const ndaRequired = data.ndaRequired ?? existing?.ndaRequired ?? false;
+      const ndaStatus = data.ndaStatus ?? existing?.ndaStatus ?? "NOT_REQUIRED";
+      const approvalStatus = data.approvalStatus ?? existing?.approvalStatus ?? "PENDING";
+      const ownerApproved = data.ownerApproved ?? existing?.ownerApproved ?? false;
+      const shippingStatus = data.shippingStatus ?? existing?.shippingStatus ?? "NOT_SHIPPED";
+
+      // 1) Never auto-approve: APPROVED requires explicit owner approval.
+      if (approvalStatus === "APPROVED" && ownerApproved !== true) {
         throw new Error(
-          "Sample request cannot be approved/shipped without explicit owner approval (set 'Owner approved' first).",
+          "Sample request can only be APPROVED after explicit owner approval (set 'Owner approved' first).",
         );
+      }
+
+      // 2) NDA gate: if an NDA is required it must be SIGNED before approval.
+      if (approvalStatus === "APPROVED" && ndaRequired && ndaStatus !== "SIGNED") {
+        throw new Error(
+          "This request requires a signed NDA before it can be approved." +
+            (isPureMat ? " (Pure Mat always requires a signed NDA and owner approval.)" : ""),
+        );
+      }
+
+      // 3) Fulfilment gate: cannot ship/deliver before the request is APPROVED.
+      if ((shippingStatus === "SHIPPED" || shippingStatus === "DELIVERED") && approvalStatus !== "APPROVED") {
+        throw new Error("Sample cannot be shipped before the request is APPROVED.");
       }
     },
   },

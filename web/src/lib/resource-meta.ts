@@ -36,14 +36,9 @@ export interface ResourceMeta {
 export const PRODUCT_STATUS = ["ACTIVE", "DRAFT", "ARCHIVED"];
 export const OFFER_STATUS = ["ACTIVE", "DRAFT", "PAUSED", "ARCHIVED"];
 export const LEAD_STAGE = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST"];
-export const SAMPLE_STATUS = [
-  "REQUESTED",
-  "UNDER_REVIEW",
-  "APPROVED_PENDING_SHIPMENT",
-  "SHIPPED",
-  "REJECTED",
-  "CLOSED",
-];
+export const NDA_STATUS = ["NOT_REQUIRED", "PENDING", "SENT", "SIGNED"];
+export const SAMPLE_APPROVAL_STATUS = ["PENDING", "OWNER_APPROVAL_REQUIRED", "APPROVED", "REJECTED"];
+export const SAMPLE_SHIPPING_STATUS = ["NOT_SHIPPED", "PREPARING", "SHIPPED", "DELIVERED"];
 export const PROPOSAL_TYPE = [
   "SAMPLE_REVIEW",
   "SAMPLE_BOOK",
@@ -130,14 +125,34 @@ export const RESOURCE_META: Record<string, ResourceMeta> = {
     key: "samples",
     label: "Sample Requests",
     fields: [
-      { name: "company", label: "Company", type: "string", listVisible: true },
+      { name: "company", label: "Customer", type: "string", listVisible: true },
       { name: "contactName", label: "Contact", type: "string" },
-      { name: "leadId", label: "Linked lead", type: "relation", relation: "leads" },
+      { name: "leadId", label: "Linked customer", type: "relation", relation: "leads" },
+      {
+        name: "productId",
+        label: "Requested product",
+        type: "relation",
+        relation: "products",
+        help: "Pure Mat requests always require NDA + owner approval (enforced automatically).",
+      },
       { name: "offerId", label: "Linked offer", type: "relation", relation: "offers" },
       { name: "sampleType", label: "Sample type", type: "string", listVisible: true },
-      { name: "quantity", label: "Qty", type: "int", listVisible: true },
+      { name: "intendedUse", label: "Intended use", type: "text" },
+      {
+        name: "destinationCountry",
+        label: "Destination country",
+        type: "string",
+        listVisible: true,
+        help: "Overseas (non-Korea) requests default to a paid sample with customer-paid shipping.",
+      },
+      { name: "quantity", label: "Qty", type: "int" },
       { name: "shippingAddress", label: "Shipping address", type: "text" },
-      { name: "status", label: "Status", type: "enum", options: SAMPLE_STATUS, listVisible: true },
+      { name: "ndaRequired", label: "NDA required", type: "bool", listVisible: true },
+      { name: "ndaStatus", label: "NDA status", type: "enum", options: NDA_STATUS, listVisible: true },
+      { name: "quotedPrice", label: "Quoted price", type: "decimal", listVisible: true },
+      { name: "shippingCost", label: "Shipping cost", type: "decimal" },
+      { name: "paidSample", label: "Paid sample", type: "bool" },
+      { name: "customerPaidShipping", label: "Customer pays shipping", type: "bool" },
       {
         name: "ownerApproved",
         label: "Owner approved",
@@ -145,6 +160,21 @@ export const RESOURCE_META: Record<string, ResourceMeta> = {
         listVisible: true,
         help: "Sample requests are NEVER auto-approved. The owner must approve manually.",
       },
+      {
+        name: "approvalStatus",
+        label: "Approval status",
+        type: "enum",
+        options: SAMPLE_APPROVAL_STATUS,
+        listVisible: true,
+      },
+      {
+        name: "shippingStatus",
+        label: "Shipping status",
+        type: "enum",
+        options: SAMPLE_SHIPPING_STATUS,
+        listVisible: true,
+      },
+      { name: "followUpDate", label: "Follow-up date", type: "date", listVisible: true },
       { name: "notes", label: "Notes", type: "text" },
     ],
   },
