@@ -16,7 +16,13 @@ function relationLabel(row: Row): string {
   return row.id;
 }
 
-export default function ResourceManager({ resourceKey }: { resourceKey: string }) {
+export default function ResourceManager({
+  resourceKey,
+  reloadSignal,
+}: {
+  resourceKey: string;
+  reloadSignal?: number;
+}) {
   const meta = getMeta(resourceKey)!;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +48,7 @@ export default function ResourceManager({ resourceKey }: { resourceKey: string }
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, reloadSignal]);
 
   // Preload relation option lists for any relation fields.
   useEffect(() => {

@@ -51,6 +51,29 @@ Server-side workflow rules (`src/lib/resources.ts`, `samples.beforeWrite`):
 - **Fulfilment gate.** A sample cannot be marked *Shipped* / *Delivered* before
   the request is *Approved*.
 
+## Proposal draft generator
+
+The **Proposals** page has a *Generate draft* tool that builds a first draft from
+a static template (`src/lib/proposal-templates.ts`) — no LLM, no network. Pick a
+template and provide customer segment, customer/contact name, interested product,
+offer and a call-to-action; a live preview renders as you type.
+
+Templates:
+
+1. Fashion brand first contact email
+2. Material distributor email
+3. Sample book proposal
+4. Paid PoC proposal
+5. Global sample review email
+6. Meeting follow-up email
+
+On *Save as draft*, `POST /api/generate-proposal` resolves the product/offer
+names server-side, renders the template, runs the local risk check, and creates
+the proposal with **status = Draft** and `ownerApproved = false` (the proposal
+`type` is set from the template, e.g. Sample Book / Paid PoC / Global Sample).
+Generated drafts still go through the normal owner-approval and risk gates before
+any external use; templates deliberately avoid confidential / BLACK-level wording.
+
 ## Business rules (enforced in code)
 
 These are **not** configurable toggles — they are enforced server-side:
