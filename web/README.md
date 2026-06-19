@@ -54,6 +54,18 @@ The risk classifier (`src/lib/risk.ts`) is a deterministic, offline keyword
 heuristic — no LLM, no network. Swap that one file to upgrade the logic; the
 rest of the app is unchanged.
 
+It scans proposal and content draft text and returns a **per-phrase finding**
+for every risky term — each with its level (Green/Yellow/Red/Black) and a
+**suggested safer replacement**. Covered terms include complete biodegradation,
+quantified carbon-reduction claims, "mushroom leather" / "vegan leather",
+non-toxic, antibacterial (Red/Yellow), and confidential domains — strain names,
+substrate composition, culture conditions, detailed SOP, production cost and
+failure data (Black). The **Risk Review** page has a *Classify a phrase* tool
+that shows the findings table with suggestions, and findings can be saved to the
+log. On save, drafts whose body/content classifies as **Black** are blocked from
+being marked Approved / Published / Sent, and the error names the exact phrases
+to remove.
+
 ## Getting started
 
 ### 1. Prerequisites

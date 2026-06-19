@@ -4,7 +4,7 @@
 // write-time business guards. Used by the generic REST API.
 
 import { prisma } from "./prisma";
-import { classifyPhrase } from "./risk";
+import { blackTerms, classifyPhrase } from "./risk";
 import { FieldDef, RESOURCE_META, ResourceMeta } from "./resource-meta";
 
 export type { FieldDef } from "./resource-meta";
@@ -55,14 +55,21 @@ const SERVER_CONFIG: Record<string, ServerConfig> = {
     defaultOrderBy: { updatedAt: "desc" },
     beforeWrite(data, existing) {
       const content = data.content ?? existing?.content;
-      if (content !== undefined && content !== null) {
-        const result = classifyPhrase(String(content));
-        data.riskChecked = true;
-        if (result.blockedFromExternal && data.ownerApproved === true) {
-          throw new Error(
-            "This proposal contains BLACK-level confidential information and cannot be approved for external use. Remove the confidential phrases first.",
-          );
-        }
+      if (content === undefined || content === null) return;
+
+      const result = classifyPhrase(String(content));
+      data.riskChecked = true;
+
+      // Block BLACK-level proposals from being approved / sent / accepted.
+      const status = data.status ?? existing?.status;
+      const approving =
+        data.ownerApproved === true || ["APPROVED", "SENT", "ACCEPTED"].includes(status);
+      if (result.blockedFromExternal && approving) {
+        const terms = blackTerms(String(content));
+        throw new Error(
+          "This proposal contains BLACK-level confidential information and cannot be approved for external use. " +
+            `Remove these phrases first: ${terms.join(", ")}.`,
+        );
       }
     },
   },
@@ -77,9 +84,16 @@ const SERVER_CONFIG: Record<string, ServerConfig> = {
         data.riskChecked = true;
       }
       const effectiveRisk = data.riskLevel ?? existing?.riskLevel;
-      if (effectiveRisk === "BLACK" && data.ownerApproved === true) {
+      const status = data.status ?? existing?.status;
+
+      // Block BLACK-level drafts from being approved or published.
+      const approving =
+        data.ownerApproved === true || ["APPROVED", "PUBLISHED_MANUAL"].includes(status);
+      if (effectiveRisk === "BLACK" && approving) {
+        const terms = body != null ? blackTerms(String(body)) : [];
         throw new Error(
-          "BLACK-level content is blocked from external-facing use and cannot be approved. Remove the confidential phrases first.",
+          "BLACK-level content is blocked from external-facing use and cannot be approved. " +
+            (terms.length ? `Remove these phrases first: ${terms.join(", ")}.` : "Remove the confidential phrases first."),
         );
       }
       if (
